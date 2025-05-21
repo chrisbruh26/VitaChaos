@@ -8,7 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
         Composite = Matter.Composite,
         Body = Matter.Body,
         Events = Matter.Events, // Used for engine update cycle and collision events
-        Query = Matter.Query; // For specific world queries if needed beyond collisions
+        Query = Matter.Query, // For specific world queries if needed beyond collisions
+        Vector = Matter.Vector, // For vector operations
+        Mouse = Matter.Mouse; // Explicitly alias Mouse
 
     // --- Game Configuration ---
     const GAME_WIDTH = 1500;
@@ -20,49 +22,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const VITA_WIDTH = 30; // Made smaller
     const VITA_HEIGHT = 53; // Made smaller (approx 75% of original, maintaining aspect ratio)
     const VITA_IMAGE_PATH = 'vitasprite.png'; // Ensure this image is in the same folder as your HTML
-    // IMPORTANT: Adjust these scales based on your 'vitaspin.jpg' dimensions
-    const VITA_SPRITE_X_SCALE = 0.05; // RECALCULATE: VITA_WIDTH / your_image_actual_width
-    const VITA_SPRITE_Y_SCALE = 0.05; // RECALCULATE: VITA_HEIGHT / your_image_actual_height
+    const VITA_SPRITE_X_SCALE = 0.05;
+    const VITA_SPRITE_Y_SCALE = 0.05;
     const VITA_FRICTION_AIR = 0.01;
     const VITA_DENSITY = 0.002;
     const VITA_RESTITUTION = 0.1;
 
     // Ground Configuration
-    const GROUND_Y_OFFSET = 30; // From bottom, for the center of the ground
-    const GROUND_HEIGHT = 60;   // Thickness of the ground
+    const GROUND_Y_OFFSET = 30;
+    const GROUND_HEIGHT = 60;
     const GROUND_COLOR = '#6B8E23';
-    // need to let Vita jump on all solid objects, not just the ground
-    // (e.g., boxes, walls, etc.), so I'll need to adjust the collision detection logic
 
     // Walls
-    const WALL_THICKNESS = 50; // Thickness for boundary walls
-    const WALL_COLOR = '#333333'; // Color for walls (can be made invisible)
+    const WALL_THICKNESS = 50;
+    const WALL_COLOR = '#333333';
 
-    // Physics 
+    // Physics
     const GRAVITY_Y = 1;
     const PLAYER_MOVE_FORCE_FACTOR = 0.005;
-    const PLAYER_JUMP_FORCE_MULTIPLIER = 0.03; // Increased for a more noticeable jump
+    const PLAYER_JUMP_FORCE_MULTIPLIER = 0.03;
 
     // Other Objects
     const BOX_SIZE = 50;
     const NUM_BOXES = 14;
-    const BOX_STACK_INITIAL_X = GAME_WIDTH * 0.7; // Define the initial X position of the box stack
-    const NUM_BALLS = 20; // Number of bouncy balls
+    const BOX_STACK_INITIAL_X = GAME_WIDTH * 0.7;
+    const NUM_BALLS = 20;
     const BOUNCY_BALL_RADIUS = 10;
     const BOUNCY_BALL_RESTITUTION = 0.8;
-    const BOUNCY_BALL_COLOR = '#4682B4';
     const BACKGROUND_COLOR = '#222222';
 
+    // Forcefield Triangle Configuration
+    const NUM_TRIANGLES = 10;
+    const TRIANGLE_RADIUS = 10; // "Radius" for the polygon
+    const TRIANGLE_COLOR = '#FFD700'; // Gold
+    const FORCEFIELD_MAGNITUDE = 0.3; // Force applied by triangles. Adjust as needed.
+    const FORCE_TRIANGLE_LABEL = "ForceTriangle";
+
+    // Player Kick/Headbutt Configuration
+    const KICK_FORCE_MAGNITUDE = 0.5; // How strong Vita's kick/headbutt is. Adjust as needed.
+    const KICK_RADIUS = 80; // How close an object needs to be to Vita to be affected by the kick (pixels).
+    const KICK_ANIMATION_DURATION = 150; // Milliseconds the kick animation lasts
+    const KICK_ANIMATION_OFFSET_MAGNITUDE = 0.60; // How far the sprite shifts (as a % of sprite size)
+
+    let kickAnimationTimeout = null; // To manage the animation timeout
+
     // Camera
-    const CAMERA_PADDING = { x: 200, y: 200 }; // How far Vita is from the edge of the screen
+    const CAMERA_PADDING = { x: 200, y: 200 };
     // --- End Game Configuration ---
 
     // --- Global Game State Variables ---
     let engine, world, render, runner;
-    let vitaBody, ground, leftWall, rightWall, boxStack, bouncyBallsArray; // Game objects
-    let scoreDisplay, chaosScore = 0;
-    let isGameActive = false; // True when game is running (not in start menu, not paused)
-    let menuContainer = null; // To hold current menu
+    let vitaBody, ground, leftWall, rightWall, boxStack, bouncyBallsArray;
+    let forceTrianglesArray; // New array for forcefield triangles
+    let scoreDisplay, chaosScore = 0; // chaosScore is initialized here and reset in handleStartGame
+    let isGameActive = false;
+    let menuContainer = null;
+
 
 
     // --- Game Setup ---
@@ -71,13 +86,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("Fatal Error: Game container div not found!");
         return;
     }
-
-    // Ensure game container can host absolutely positioned children like the score
     gameContainer.style.position = 'relative';
 
     // --- Player Input Handling (Persistent) ---
     const keysPressed = {};
-    let isVitaOnGround = false; // Flag to control jumping
+    let isVitaOnGround = false;
 
     document.addEventListener('keydown', (event) => {
         keysPressed[event.key.toLowerCase()] = true;
@@ -96,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         menuElement.style.padding = '30px';
         menuElement.style.borderRadius = '10px';
         menuElement.style.textAlign = 'center';
-        menuElement.style.zIndex = '100'; // Ensure menu is on top
+        menuElement.style.zIndex = '100';
     }
 
     function createMenuButton(text, onClick) {
@@ -121,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showStartMenu() {
         clearMenu();
         isGameActive = false;
-        if (runner) Runner.stop(runner); // Stop runner if it was somehow active
+        if (runner) Runner.stop(runner);
 
         menuContainer = document.createElement('div');
         styleMenuElement(menuContainer);
@@ -138,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showPauseMenu() {
-        if (!isGameActive) return; // Don't show pause menu if game isn't active
+        if (!isGameActive) return;
         isGameActive = false;
         Runner.stop(runner);
 
@@ -179,6 +192,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Ensure render.mouse is initialized
+        if (!render.mouse) {
+            console.warn('render.mouse is not defined after Render.create. Manually creating Matter.Mouse.');
+            if (typeof Mouse !== 'undefined') { // Check if our alias Mouse exists
+                render.mouse = Mouse.create(render.canvas);
+                if (render.mouse) {
+                    console.log('Manually created render.mouse successfully.');
+                } else {
+                    console.error('Failed to manually create render.mouse.');
+                }
+            } else {
+                console.error('Matter.Mouse (aliased as Mouse) is not available for manual creation.');
+            }
+        }
         vitaBody = Bodies.rectangle(VITA_START_X, GAME_HEIGHT - VITA_START_Y_OFFSET, VITA_WIDTH, VITA_HEIGHT, {
             label: "Vita",
             frictionAir: VITA_FRICTION_AIR,
@@ -201,9 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
         boxStack = [];
         const boxSize = BOX_SIZE;
         for (let i = 0; i < NUM_BOXES; i++) {
-            const box = Bodies.rectangle(BOX_STACK_INITIAL_X, GAME_HEIGHT - GROUND_HEIGHT - (VITA_HEIGHT / 2) - (i * (boxSize + 5)), boxSize, boxSize, {
+            const initialX = BOX_STACK_INITIAL_X;
+            const initialY = GAME_HEIGHT - GROUND_HEIGHT - (VITA_HEIGHT / 2) - (i * (boxSize + 5));
+            const box = Bodies.rectangle(initialX, initialY, boxSize, boxSize, {
                 label: `Box-${i}`, friction: 0.1, restitution: 0.3, render: { fillStyle: `hsl(${i * 30}, 70%, 60%)` }
             });
+            // Store initial properties for scoring
+            box.initialPosition = { x: initialX, y: initialY };
+            box.initialAngle = box.angle; // Should be 0 initially
             boxStack.push(box);
         }
 
@@ -218,86 +250,177 @@ document.addEventListener('DOMContentLoaded', () => {
             bouncyBallsArray.push(ball);
         }
 
-        Composite.add(world, [vitaBody, ground, leftWall, rightWall, ...boxStack, ...bouncyBallsArray]);
+        forceTrianglesArray = [];
+        for (let i = 0; i < NUM_TRIANGLES; i++) {
+            const triX = GAME_WIDTH * 0.3 + i * (TRIANGLE_RADIUS * 3);
+            const triY = GAME_HEIGHT - GROUND_Y_OFFSET - TRIANGLE_RADIUS - 100; // Place them a bit above ground
+            const triangle = Bodies.polygon(triX, triY, 3, TRIANGLE_RADIUS, {
+                label: FORCE_TRIANGLE_LABEL,
+                friction: 0.05,
+                restitution: 0.1,
+                render: { fillStyle: TRIANGLE_COLOR }
+            });
+            forceTrianglesArray.push(triangle);
+        }
 
-        // Setup event listeners that depend on engine objects
+        Composite.add(world, [vitaBody, ground, leftWall, rightWall, ...boxStack, ...bouncyBallsArray, ...forceTrianglesArray]);
+
         setupGameEventListeners();
-
-        runner = Runner.create(); // Create the runner
-        Render.run(render); // Start the renderer
+        runner = Runner.create();
+        addMouseClickListener(); // Add the listener for kicking
+        Render.run(render);
     }
 
     function setupGameEventListeners() {
-    // Collision detection to see if Vita is on the ground
-    Events.on(engine, 'collisionStart', (event) => {
-        const pairs = event.pairs;
-        for (let i = 0; i < pairs.length; i++) {
-            const pair = pairs[i];
-            if ((pair.bodyA.label === "Vita" && pair.bodyB.label === "Ground") ||
-                (pair.bodyB.label === "Vita" && pair.bodyA.label === "Ground")) {
-                isVitaOnGround = true;
-                break;
+        Events.on(engine, 'collisionStart', (event) => {
+            const pairs = event.pairs;
+            for (let i = 0; i < pairs.length; i++) {
+                const pair = pairs[i];
+                if ((pair.bodyA.label === "Vita" && pair.bodyB.label === "Ground") ||
+                    (pair.bodyB.label === "Vita" && pair.bodyA.label === "Ground")) {
+                    isVitaOnGround = true;
+                    break;
+                }
             }
-            // Optional: Allow jumping from on top of boxes (more complex, requires checking collision normal)
-            // if ((pair.bodyA.label === "Vita" && pair.bodyB.label.startsWith("Box-")) ||
-            //     (pair.bodyB.label === "Vita" && pair.bodyA.label.startsWith("Box-"))) {
-            //     // Check if collision is from top
-            //     if (pair.collision.normal.y < -0.5 && pair.bodyA.label === "Vita") isVitaOnGround = true; // Vita is bodyA, hit from top
-            //     if (pair.collision.normal.y > 0.5 && pair.bodyB.label === "Vita") isVitaOnGround = true; // Vita is bodyB, hit from top
-            // }
-        }
-    });
+        });
 
-        // Calculate forces based on Vita's mass (mass = density * area)
-        // These need vitaBody to be initialized.
         const moveForce = PLAYER_MOVE_FORCE_FACTOR * vitaBody.mass;
         const jumpForce = PLAYER_JUMP_FORCE_MULTIPLIER * vitaBody.mass;
 
-    // Game loop updates (called by Matter.Runner)
-    Events.on(engine, 'beforeUpdate', (event) => {
-            if (!isGameActive) return; // Don't process game logic if not active
-            // Horizontal movement
+        Events.on(engine, 'beforeUpdate', (event) => {
+            if (!isGameActive) return;
             if (keysPressed['a'] || keysPressed['arrowleft']) {
-            Body.applyForce(vitaBody, vitaBody.position, { x: -moveForce, y: 0 });
-        }
-        if (keysPressed['d'] || keysPressed['arrowright']) {
-            Body.applyForce(vitaBody, vitaBody.position, { x: moveForce, y: 0 });
-        }
-
-        // Jump
-        if ((keysPressed['w'] || keysPressed['arrowup'] || keysPressed[' ']) && isVitaOnGround) {
-            Body.applyForce(vitaBody, vitaBody.position, { x: 0, y: -jumpForce });
-            isVitaOnGround = false; // Prevent double jump until next ground contact
-        }
-
-        // Keep Vita from rotating too much (optional, like a platformer character)
-        // Body.setAngularVelocity(vitaBody, 0);
-
-        // Walls now handle keeping Vita within bounds, so screen wrapping is removed.
-    });
-
-    Events.on(engine, 'afterUpdate', () => {
-            if (!isGameActive) return; // Don't process game logic if not active
-        // Crude check: if any box is significantly moved or tilted
-        let currentChaos = 0;
-        boxStack.forEach(box => {
-            const isTilted = Math.abs(box.angle) > 0.5;
-            const isMovedHorizontally = Math.abs(box.position.x - BOX_STACK_INITIAL_X) > BOX_SIZE * 0.75; // Moved more than 3/4 its width
-            if (isTilted || isMovedHorizontally) {
-                currentChaos += 10;
+                Body.applyForce(vitaBody, vitaBody.position, { x: -moveForce, y: 0 });
+            }
+            if (keysPressed['d'] || keysPressed['arrowright']) {
+                Body.applyForce(vitaBody, vitaBody.position, { x: moveForce, y: 0 });
+            }
+            if ((keysPressed['w'] || keysPressed['arrowup'] || keysPressed[' ']) && isVitaOnGround) {
+                Body.applyForce(vitaBody, vitaBody.position, { x: 0, y: -jumpForce });
+                isVitaOnGround = false;
             }
         });
-        bouncyBallsArray.forEach(ball => {
-            if (Math.abs(ball.velocity.x) > 1 || Math.abs(ball.velocity.y) > 1) {
-                currentChaos += 5; // Add 5 for each moving ball
+
+        Events.on(engine, 'afterUpdate', () => {
+            if (!isGameActive) return;
+
+            const SIGNIFICANT_DISPLACEMENT_THRESHOLD = BOX_SIZE * 0.3;
+            const SIGNIFICANT_ANGLE_CHANGE_RADIANS = 0.2;
+            const BALL_VELOCITY_SCORE_THRESHOLD = 2.5;
+
+            let currentChaos = 0;
+            boxStack.forEach(box => {
+                const displacement = Vector.magnitude(Vector.sub(box.position, box.initialPosition));
+                const angleChange = Math.abs(box.angle - box.initialAngle);
+
+                if (displacement > SIGNIFICANT_DISPLACEMENT_THRESHOLD || angleChange > SIGNIFICANT_ANGLE_CHANGE_RADIANS) {
+                    currentChaos += 10;
+                }
+            });
+            bouncyBallsArray.forEach(ball => {
+                const speed = Vector.magnitude(ball.velocity);
+            
+            if (speed > BALL_VELOCITY_SCORE_THRESHOLD) {
+                chaosScore += 5;
             }
         });
-        chaosScore = Math.max(chaosScore, currentChaos); // Keep the max chaos achieved
-        scoreDisplay.textContent = `Chaos Score: ${chaosScore}`;
 
-        // Center camera on Vita
-        Render.lookAt(render, vitaBody, CAMERA_PADDING, true);
-    });
+        if (currentChaos > chaosScore) {
+            chaosScore = currentChaos;}
+
+
+            if (scoreDisplay) { // Ensure scoreDisplay exists before trying to update it
+                 scoreDisplay.textContent = `Chaos Score: ${chaosScore}`;
+            }
+
+            Render.lookAt(render, vitaBody, CAMERA_PADDING, true);
+        });
+
+        // Forcefield logic for triangles
+        Events.on(engine, 'collisionActive', (event) => {
+            if (!isGameActive) return;
+            const pairs = event.pairs;
+
+            for (let i = 0; i < pairs.length; i++) {
+                const pair = pairs[i];
+                let triangleBody = null;
+                let otherBody = null;
+
+                if (pair.bodyA.label === FORCE_TRIANGLE_LABEL && pair.bodyB.label !== "Vita" && pair.bodyB.label !== FORCE_TRIANGLE_LABEL && !pair.bodyB.isStatic) {
+                    triangleBody = pair.bodyA;
+                    otherBody = pair.bodyB;
+                } else if (pair.bodyB.label === FORCE_TRIANGLE_LABEL && pair.bodyA.label !== "Vita" && pair.bodyA.label !== FORCE_TRIANGLE_LABEL && !pair.bodyA.isStatic) {
+                    triangleBody = pair.bodyB;
+                    otherBody = pair.bodyA;
+                }
+
+                if (triangleBody && otherBody) {
+                    const direction = Vector.sub(otherBody.position, triangleBody.position);
+                    const normalizedDirection = Vector.normalise(direction); // Corrected spelling
+                    const force = Vector.mult(normalizedDirection, FORCEFIELD_MAGNITUDE);
+                    Body.applyForce(otherBody, otherBody.position, force);
+                }
+            }
+        });
+    }
+
+    function addMouseClickListener() {
+        if (!render || !render.canvas) {
+            console.error("Render canvas not available to add mouse listener.");
+            return;
+        }
+
+        render.canvas.addEventListener('mousedown', (event) => {
+            if (!isGameActive || event.button !== 0) { // Only on left click (button 0) and when game is active
+                return;
+            }
+
+            const mousePosition = render.mouse.position; // Mouse position relative to canvas
+
+            // Calculate direction from Vita to the mouse click
+            let kickDirection = Vector.sub(mousePosition, vitaBody.position);
+
+            if (Vector.magnitudeSquared(kickDirection) === 0) { // Avoid division by zero if mouse is exactly on Vita
+                // Default kick direction (e.g., slightly to the right, or based on Vita's velocity if implemented)
+                // For now, let's just make it a small horizontal push if direction is zero.
+                kickDirection = { x: 1, y: 0 };
+            }
+            kickDirection = Vector.normalise(kickDirection);
+
+            // --- Kick Animation Start ---
+            if (kickAnimationTimeout) {
+                clearTimeout(kickAnimationTimeout); // Clear any existing animation timeout
+            }
+            // Store original offsets if not already default (though they should be)
+            const originalXOffset = vitaBody.render.sprite.xOffset || 0;
+            const originalYOffset = vitaBody.render.sprite.yOffset || 0;
+
+            // Apply animation offset
+            vitaBody.render.sprite.xOffset = originalXOffset + kickDirection.x * KICK_ANIMATION_OFFSET_MAGNITUDE;
+            vitaBody.render.sprite.yOffset = originalYOffset + kickDirection.y * KICK_ANIMATION_OFFSET_MAGNITUDE;
+
+            kickAnimationTimeout = setTimeout(() => {
+                vitaBody.render.sprite.xOffset = originalXOffset; // Revert to original
+                vitaBody.render.sprite.yOffset = originalYOffset; // Revert to original
+                kickAnimationTimeout = null;
+            }, KICK_ANIMATION_DURATION);
+            // --- Kick Animation End ---
+
+            const allDynamicBodies = [...boxStack, ...bouncyBallsArray, ...forceTrianglesArray];
+
+            allDynamicBodies.forEach(objectBody => {
+                if (objectBody === vitaBody || objectBody.isStatic) {
+                    return; // Don't kick self or static objects
+                }
+
+                const distanceToVita = Vector.magnitude(Vector.sub(objectBody.position, vitaBody.position));
+
+                if (distanceToVita < KICK_RADIUS) {
+                    const forceVector = Vector.mult(kickDirection, KICK_FORCE_MAGNITUDE);
+                    Body.applyForce(objectBody, objectBody.position, forceVector);
+                }
+            });
+        });
     }
 
     function handleStartGame() {
@@ -305,18 +428,19 @@ document.addEventListener('DOMContentLoaded', () => {
         isGameActive = true;
         chaosScore = 0; // Reset score
 
-        // Create and append score display
-        scoreDisplay = document.createElement('div');
-        scoreDisplay.style.position = 'absolute';
-        scoreDisplay.style.top = '10px';
-        scoreDisplay.style.left = '10px';
-        scoreDisplay.style.color = 'white';
-        scoreDisplay.style.fontFamily = 'Arial, sans-serif';
-        scoreDisplay.style.fontSize = '20px';
-        gameContainer.appendChild(scoreDisplay);
+        if (!scoreDisplay || !scoreDisplay.parentNode) { // Create score display if it doesn't exist or was removed
+            scoreDisplay = document.createElement('div');
+            scoreDisplay.style.position = 'absolute';
+            scoreDisplay.style.top = '10px';
+            scoreDisplay.style.left = '10px';
+            scoreDisplay.style.color = 'white';
+            scoreDisplay.style.fontFamily = 'Arial, sans-serif';
+            scoreDisplay.style.fontSize = '20px';
+            gameContainer.appendChild(scoreDisplay);
+        }
         scoreDisplay.textContent = `Chaos Score: ${chaosScore}`;
 
-        Runner.run(runner, engine); // Start the physics engine simulation
+        Runner.run(runner, engine);
 
         console.log("Vita Chaos Started! Control Vita with A/D (or Left/Right Arrows) to move, W/Up Arrow/Space to jump.");
         console.log("Cause some chaos!");
@@ -325,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleResumeGame() {
         clearMenu();
         isGameActive = true;
-        Runner.start(runner, engine); // Resume the physics engine simulation
+        Runner.start(runner, engine);
     }
 
     function handleRestartGame() {
@@ -333,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleQuitGame() {
-        window.location.href = 'index.html'; // Assuming your main page is index.html
+        window.location.href = 'index.html';
     }
 
     // Global key listener for pause
@@ -342,7 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isGameActive) {
                 showPauseMenu();
             } else if (menuContainer && menuContainer.textContent.includes('Paused')) {
-                // If pause menu is already open, Esc can also resume
                 handleResumeGame();
             }
         }
@@ -352,19 +475,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const vitaSprite = new Image();
     vitaSprite.onload = () => {
         console.log("Vita sprite loaded successfully!");
-        // Now that the image is loaded, we can set up and start the game.
-        setupGame(); // Sets up engine, renderer, objects, runner
-        showStartMenu(); // Display the start menu initially
+        setupGame();
+        showStartMenu();
     };
     vitaSprite.onerror = () => {
         console.error(`Error loading Vita sprite from path: ${VITA_IMAGE_PATH}. Game cannot start correctly with sprite.`);
-        // Optionally, you could fall back to a version of setupGame that doesn't use the sprite,
-        // or just show an error message on the screen.
-        // For now, we'll still try to set up, but Vita will likely be invisible or cause errors.
-        // A better approach would be to prevent game start or use a placeholder.
         alert(`Failed to load critical game asset: ${VITA_IMAGE_PATH}. Vita may not be visible.`);
         setupGame(); // Attempt to setup anyway, or handle this more gracefully
         showStartMenu();
     };
-    vitaSprite.src = VITA_IMAGE_PATH; // Start loading the image
+    vitaSprite.src = VITA_IMAGE_PATH;
 });
