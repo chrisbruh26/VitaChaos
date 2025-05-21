@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const VITA_START_Y_OFFSET = 90; // From bottom, center of Vita (Adjusted for new height)
     const VITA_WIDTH = 30; // Made smaller
     const VITA_HEIGHT = 53; // Made smaller (approx 75% of original, maintaining aspect ratio)
-    const VITA_IMAGE_PATH = 'images/vitaimages/vitasprite.png'; // Ensure this image is in the same folder as your HTML
+    const VITA_IMAGE_PATH = 'vitasprite.png'; // Ensure this image is in the same folder as your HTML
     // IMPORTANT: Adjust these scales based on your 'vitaspin.jpg' dimensions
     const VITA_SPRITE_X_SCALE = 0.05; // RECALCULATE: VITA_WIDTH / your_image_actual_width
     const VITA_SPRITE_Y_SCALE = 0.05; // RECALCULATE: VITA_HEIGHT / your_image_actual_height
