@@ -251,16 +251,18 @@ document.addEventListener('DOMContentLoaded', () => {
             isStatic: true, label: "WallRight", render: { fillStyle: WALL_COLOR }
         });
 
-
+//GAME_WIDTH * 0.2 + i * (BOUNCY_BALL_RADIUS * 2.5);
+//100 + (i % 2 === 0 ? 0 : BOUNCY_BALL_RADIUS * 1.5);
+            
         // create a stack of frogs
 
         frogStack = [];
         const frogSize = FROG_SIZE;
         for (let i = 0; i < NUM_FROGS; i++) {
-            const initialX = BOX_STACK_INITIAL_X + 100; // Offset from the box stack);
-            const initialY = GAME_HEIGHT - GROUND_HEIGHT + (BOX_SIZE / 2) - (i * (VITA_HEIGHT + 5));
+            const initialX = GAME_WIDTH * 0.2 + i * (FROG_SIZE * 10); // Offset from the box stack);
+            const initialY = 100 + (i % 2 === 0 ? 0 : FROG_SIZE * 10);
             const frog = Bodies.rectangle(initialX, initialY, frogSize, frogSize, {
-                label: `Frog-${i}`, friction: 0.1, restitution: 0.3, render: {
+                label: `Frog-${i}`, friction: 0.1, restitution: 1.2, render: {
                 sprite: {
                     texture: 'frog.png', // Path to your frog image
                     xScale: 0.1, // Scale the image down
