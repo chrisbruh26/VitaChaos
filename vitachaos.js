@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Events = Matter.Events, // Used for engine update cycle and collision events
         Query = Matter.Query, // For specific world queries if needed beyond collisions
         Vector = Matter.Vector, // For vector operations
-        Mouse = Matter.Mouse; // Explicitly alias Mouse
+        Mouse = Matter.Mouse, // Explicitly alias Mouse
+        Constraint = Matter.Constraint; // For grabbing objects
 
     // --- Game Configuration ---
     const GAME_WIDTH = 1500;
@@ -37,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const WALL_THICKNESS = 50;
     const WALL_COLOR = '#333333';
 
+    // Ceiling Configuration
+    const CEILING_Y_OFFSET = -WALL_THICKNESS / 2; // Position it just above the game area
+    const CEILING_HEIGHT = WALL_THICKNESS;
+
     // Physics
     const GRAVITY_Y = 1;
     const PLAYER_MOVE_FORCE_FACTOR = 0.005;
@@ -48,8 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const BOX_STACK_INITIAL_X = GAME_WIDTH * 0.7;
     const NUM_BALLS = 20;
     const BOUNCY_BALL_RADIUS = 10;
-    const BOUNCY_BALL_RESTITUTION = 0.8;
+    const BOUNCY_BALL_RESTITUTION = 0.5; // Example: Made less bouncy
     const BACKGROUND_COLOR = '#222222';
+
+    // Frog Configuration
+
+    const FROG_SIZE = 5;
+    const NUM_FROGS = 14;
+    
 
     // Forcefield Triangle Configuration
     const NUM_TRIANGLES = 10;
@@ -66,16 +77,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let kickAnimationTimeout = null; // To manage the animation timeout
 
+    // Player Grab/Throw Configuration
+    const GRAB_RADIUS = 70; // How close an object needs to be to Vita to be grabbed.
+    const THROW_FORCE_MAGNITUDE = 0.7; // How strong the throw is.
+    const GRAB_POINT_OFFSET = { x: VITA_WIDTH / 2 + 15, y: -VITA_HEIGHT / 4 }; // Point in front of Vita to hold objects
+
     // Camera
-    const CAMERA_PADDING = { x: 200, y: 200 };
+    const CAMERA_PADDING = { x: 200, y: 200 }; // How far Vita is from the edge of the screen
+
+    // Respawn Configuration
+    const RESPAWN_Y_LIMIT = GAME_HEIGHT + 200; // If object.y > this, respawn
+    const RESPAWN_X_BUFFER = 200; // If object.x < -RESPAWN_X_BUFFER or > GAME_WIDTH + RESPAWN_X_BUFFER, respawn
     // --- End Game Configuration ---
 
     // --- Global Game State Variables ---
     let engine, world, render, runner;
-    let vitaBody, ground, leftWall, rightWall, boxStack, bouncyBallsArray;
+    let vitaBody, ground, ceiling, leftWall, rightWall, boxStack, bouncyBallsArray;
     let forceTrianglesArray; // New array for forcefield triangles
     let scoreDisplay, chaosScore = 0; // chaosScore is initialized here and reset in handleStartGame
     let isGameActive = false;
+    let heldObject = null;
+    let grabConstraint = null;
     let menuContainer = null;
 
 
@@ -218,12 +240,41 @@ document.addEventListener('DOMContentLoaded', () => {
             isStatic: true, label: "Ground", render: { fillStyle: GROUND_COLOR }
         });
 
+        ceiling = Bodies.rectangle(GAME_WIDTH / 2, CEILING_Y_OFFSET, GAME_WIDTH + WALL_THICKNESS * 2, CEILING_HEIGHT, { // Make it wider than game area
+            isStatic: true, label: "Ceiling", render: { fillStyle: WALL_COLOR /* visible: false */ }
+        });
+
         leftWall = Bodies.rectangle(-WALL_THICKNESS / 4, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, {
             isStatic: true, label: "WallLeft", render: { fillStyle: WALL_COLOR }
         });
         rightWall = Bodies.rectangle(GAME_WIDTH + WALL_THICKNESS / 2, GAME_HEIGHT / 2, WALL_THICKNESS, GAME_HEIGHT * 2, {
             isStatic: true, label: "WallRight", render: { fillStyle: WALL_COLOR }
         });
+
+
+        // create a stack of frogs
+
+        frogStack = [];
+        const frogSize = FROG_SIZE;
+        for (let i = 0; i < NUM_FROGS; i++) {
+            const initialX = BOX_STACK_INITIAL_X + 100; // Offset from the box stack);
+            const initialY = GAME_HEIGHT - GROUND_HEIGHT + (BOX_SIZE / 2) - (i * (VITA_HEIGHT + 5));
+            const frog = Bodies.rectangle(initialX, initialY, frogSize, frogSize, {
+                label: `Frog-${i}`, friction: 0.1, restitution: 0.3, render: {
+                sprite: {
+                    texture: 'frog.png', // Path to your frog image
+                    xScale: 0.1, // Scale the image down
+                    yScale: 0.1
+                }
+            }
+ 
+            });
+            // Store initial properties for scoring
+            frog.initialPosition = { x: initialX, y: initialY };
+            frog.initialAngle = frog.angle; // Should be 0 initially
+            frogStack.push(frog);
+        }
+
 
         boxStack = [];
         const boxSize = BOX_SIZE;
@@ -247,6 +298,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 label: `BouncyBall-${i}`, restitution: BOUNCY_BALL_RESTITUTION, friction: 0.05, frictionAir: 0.005,
                 render: { fillStyle: `hsl(${i * (360 / NUM_BALLS)}, 80%, 60%)` }
             });
+            ball.initialPosition = { x: startX, y: startY }; // Store initial position for respawn
+            ball.initialAngle = ball.angle;
             bouncyBallsArray.push(ball);
         }
 
@@ -260,10 +313,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 restitution: 0.1,
                 render: { fillStyle: TRIANGLE_COLOR }
             });
+            triangle.initialPosition = { x: triX, y: triY }; // Store initial position for respawn
+            triangle.initialAngle = triangle.angle;
             forceTrianglesArray.push(triangle);
         }
 
-        Composite.add(world, [vitaBody, ground, leftWall, rightWall, ...boxStack, ...bouncyBallsArray, ...forceTrianglesArray]);
+        Composite.add(world, [vitaBody, ground, ceiling, leftWall, rightWall, ...boxStack, ...bouncyBallsArray, ...forceTrianglesArray, ...frogStack]);
 
         setupGameEventListeners();
         runner = Runner.create();
@@ -276,10 +331,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const pairs = event.pairs;
             for (let i = 0; i < pairs.length; i++) {
                 const pair = pairs[i];
-                if ((pair.bodyA.label === "Vita" && pair.bodyB.label === "Ground") ||
-                    (pair.bodyB.label === "Vita" && pair.bodyA.label === "Ground")) {
-                    isVitaOnGround = true;
-                    break;
+                let bodyA = pair.bodyA;
+                let bodyB = pair.bodyB;
+
+                // Check if Vita is one of the bodies in the collision
+                if (bodyA.label === "Vita" || bodyB.label === "Vita") {
+                    const vitaIsBodyA = bodyA.label === "Vita";
+                    const otherBody = vitaIsBodyA ? bodyB : bodyA;
+
+                    // Don't allow jumping off self (shouldn't happen) or if the other body is somehow Vita too
+                    if (otherBody.label === "Vita") continue;
+
+                    // Check collision normal to ensure Vita is on top of the other object.
+                    // The collision normal.y points from bodyB towards bodyA.
+                    // If Vita is bodyA and lands on bodyB, normal.y will be negative (e.g., -1 for flat).
+                    // If Vita is bodyB and lands on bodyA, normal.y will be positive (e.g., +1 for flat).
+                    const normalY = pair.collision.normal.y;
+                    const onTopThreshold = 0.7; // How "flat" the surface needs to be considered on top
+
+                    if ((vitaIsBodyA && normalY < -onTopThreshold) || (!vitaIsBodyA && normalY > onTopThreshold)) {
+                        isVitaOnGround = true;
+                        break; // Vita has landed on something, no need to check other pairs for this event
+                    }
                 }
             }
         });
@@ -320,8 +393,8 @@ document.addEventListener('DOMContentLoaded', () => {
             bouncyBallsArray.forEach(ball => {
                 const speed = Vector.magnitude(ball.velocity);
             
-            if (speed > BALL_VELOCITY_SCORE_THRESHOLD) {
-                chaosScore += 5;
+            if (speed > BALL_VELOCITY_SCORE_THRESHOLD) { // Corrected: was chaosScore += 5
+                currentChaos += 5;
             }
         });
 
@@ -332,6 +405,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (scoreDisplay) { // Ensure scoreDisplay exists before trying to update it
                  scoreDisplay.textContent = `Chaos Score: ${chaosScore}`;
             }
+
+            // --- Out-of-Bounds Respawn Logic ---
+            const allRespawnableObjects = [...boxStack, ...bouncyBallsArray, ...forceTrianglesArray];
+            allRespawnableObjects.forEach(obj => {
+                if (obj.position.y > RESPAWN_Y_LIMIT ||
+                    obj.position.x < -RESPAWN_X_BUFFER ||
+                    obj.position.x > GAME_WIDTH + RESPAWN_X_BUFFER) {
+
+                    Body.setPosition(obj, { ...obj.initialPosition }); // Reset to initial position
+                    Body.setVelocity(obj, { x: 0, y: 0 });             // Reset velocity
+                    Body.setAngularVelocity(obj, 0);                   // Reset angular velocity
+                    Body.setAngle(obj, obj.initialAngle || 0);         // Reset angle
+                    if (obj === heldObject) { // If Vita was holding it, release it
+                        toggleGrabReleaseObject(); // This will handle removing constraint etc.
+                    }
+                }
+            });
 
             Render.lookAt(render, vitaBody, CAMERA_PADDING, true);
         });
@@ -423,6 +513,83 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function toggleGrabReleaseObject() {
+        if (!isGameActive) return;
+
+        if (heldObject) {
+            // --- Release/Throw Object ---
+            if (grabConstraint) {
+                Composite.remove(world, grabConstraint);
+                grabConstraint = null;
+            }
+
+            // Reset collision filter for the object and Vita
+            if (heldObject.originalCollisionFilter) {
+                Body.set(heldObject, 'collisionFilter', heldObject.originalCollisionFilter);
+                delete heldObject.originalCollisionFilter;
+            }
+            if (vitaBody.originalCollisionFilterForGrab) {
+                 Body.set(vitaBody, 'collisionFilter', vitaBody.originalCollisionFilterForGrab);
+                 delete vitaBody.originalCollisionFilterForGrab;
+            }
+
+
+            // Throwing logic (similar to kick, towards mouse)
+            const mousePosition = render.mouse.position;
+            let throwDirection = Vector.sub(mousePosition, vitaBody.position);
+            if (Vector.magnitudeSquared(throwDirection) === 0) {
+                throwDirection = { x: 1, y: 0 }; // Default throw right
+            }
+            throwDirection = Vector.normalise(throwDirection);
+            const throwForce = Vector.mult(throwDirection, THROW_FORCE_MAGNITUDE);
+            
+            // Add Vita's velocity to the throw for a more natural feel
+            const combinedVelocityThrow = Vector.add(vitaBody.velocity, Vector.mult(throwDirection, THROW_FORCE_MAGNITUDE / heldObject.mass * 10)); // Adjust multiplier for desired effect
+            // Body.setVelocity(heldObject, combinedVelocityThrow); // Option 1: Set velocity
+            Body.applyForce(heldObject, heldObject.position, throwForce); // Option 2: Apply force
+
+            heldObject = null;
+
+        } else {
+            // --- Grab Object ---
+            const allDynamicBodies = [...boxStack, ...bouncyBallsArray, ...forceTrianglesArray];
+            let closestObject = null;
+            let minDistanceSq = GRAB_RADIUS * GRAB_RADIUS;
+
+            allDynamicBodies.forEach(obj => {
+                if (obj.isStatic) return;
+                const distSq = Vector.magnitudeSquared(Vector.sub(obj.position, vitaBody.position));
+                if (distSq < minDistanceSq) {
+                    minDistanceSq = distSq;
+                    closestObject = obj;
+                }
+            });
+
+            if (closestObject) {
+                heldObject = closestObject;
+
+                // Store original collision filters and then modify
+                heldObject.originalCollisionFilter = { ...heldObject.collisionFilter };
+                vitaBody.originalCollisionFilterForGrab = { ...vitaBody.collisionFilter };
+
+                const noCollideGroup = -1; // Objects in the same negative group don't collide
+                Body.set(heldObject, 'collisionFilter', { ...heldObject.originalCollisionFilter, group: noCollideGroup });
+                Body.set(vitaBody, 'collisionFilter', { ...vitaBody.originalCollisionFilterForGrab, group: noCollideGroup });
+
+                grabConstraint = Constraint.create({
+                    bodyA: vitaBody,
+                    pointA: { ...GRAB_POINT_OFFSET }, // Use a copy
+                    bodyB: heldObject,
+                    pointB: { x: 0, y: 0 }, // Attach to center of held object
+                    stiffness: 0.07, // Adjust for desired "carry" feel
+                    damping: 0.1,
+                    length: Vector.magnitude(GRAB_POINT_OFFSET) + (heldObject.circleRadius || Math.max(heldObject.bounds.max.x - heldObject.bounds.min.x, heldObject.bounds.max.y - heldObject.bounds.min.y) / 3) // Approximate length
+                });
+                Composite.add(world, grabConstraint);
+            }
+        }
+    }
+
     function handleStartGame() {
         clearMenu();
         isGameActive = true;
@@ -462,12 +629,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global key listener for pause
     document.addEventListener('keydown', (event) => {
-        if (event.key.toLowerCase() === 'escape') {
+        const key = event.key.toLowerCase();
+        if (key === 'escape') {
             if (isGameActive) {
                 showPauseMenu();
             } else if (menuContainer && menuContainer.textContent.includes('Paused')) {
                 handleResumeGame();
             }
+        } else if (key === 'e' && isGameActive) {
+            toggleGrabReleaseObject();
         }
     });
 
@@ -485,4 +655,5 @@ document.addEventListener('DOMContentLoaded', () => {
         showStartMenu();
     };
     vitaSprite.src = VITA_IMAGE_PATH;
+    frogSprite.src = 'frog.png'; // Ensure this image is in the same folder as your HTML
 });
