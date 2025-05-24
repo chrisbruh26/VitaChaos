@@ -395,21 +395,29 @@ class VitaChaosLevelEditor {
         switch (this.selectedObjectType.name) {
             case 'Box':
                 this.addFormField(form, 'size', 'Size', 'number', this.gameConfig.BOX_SIZE || 50);
+                this.addFormField(form, 'friction', 'Friction', 'number', 0.1, 0, 1, 0.01);
+                this.addFormField(form, 'restitution', 'Bounciness', 'number', 0.1, 0, 1, 0.01);
                 this.addFormField(form, 'color', 'Color', 'color', '#FF5733');
                 break;
                 
             case 'BouncyBall':
                 this.addFormField(form, 'radius', 'Radius', 'number', this.gameConfig.BOUNCY_BALL_RADIUS || 10);
-                this.addFormField(form, 'restitution', 'Bounciness', 'number', this.gameConfig.BOUNCY_BALL_RESTITUTION || 0.5, 0, 1, 0.1);
+                this.addFormField(form, 'restitution', 'Bounciness', 'number', this.gameConfig.BOUNCY_BALL_RESTITUTION || 0.8, 0, 2, 0.1);
+                this.addFormField(form, 'friction', 'Friction', 'number', 0.01, 0, 1, 0.01);
+                this.addFormField(form, 'frictionAir', 'Air Friction', 'number', 0.001, 0, 0.1, 0.001);
                 this.addFormField(form, 'color', 'Color', 'color', '#3498DB');
                 break;
                 
             case 'Frog':
                 this.addFormField(form, 'size', 'Size', 'number', this.gameConfig.FROG_SIZE || 5);
+                this.addFormField(form, 'friction', 'Friction', 'number', 0.1, 0, 1, 0.01);
+                this.addFormField(form, 'restitution', 'Bounciness', 'number', 1.2, 0, 2, 0.1);
                 break;
                 
             case 'Foofoo':
                 this.addFormField(form, 'size', 'Size', 'number', this.gameConfig.FOOFOO_SIZE || 4);
+                this.addFormField(form, 'friction', 'Friction', 'number', 0.1, 0, 1, 0.01);
+                this.addFormField(form, 'restitution', 'Bounciness', 'number', 0.6, 0, 1, 0.1);
                 break;
                 
             case 'ForceTriangle':
@@ -924,6 +932,18 @@ class VitaChaosLevelEditor {
                     );
                     // Override the color
                     object.body.render.fillStyle = properties.color;
+                    
+                    // Apply additional properties
+                    if (properties.friction !== undefined) {
+                        object.body.friction = parseFloat(properties.friction);
+                    }
+                    if (properties.restitution !== undefined) {
+                        object.body.restitution = parseFloat(properties.restitution);
+                    }
+                    
+                    // Store initial position for respawn logic
+                    object.body.initialPosition = { x: position.x, y: position.y };
+                    object.body.initialAngle = 0;
                     break;
                     
                 case 'BouncyBall':
@@ -936,8 +956,23 @@ class VitaChaosLevelEditor {
                         1  // Total balls (not important for editor)
                     );
                     // Override properties
-                    object.body.restitution = properties.restitution;
+                    object.body.restitution = parseFloat(properties.restitution);
                     object.body.render.fillStyle = properties.color;
+                    
+                    // Apply additional properties
+                    if (properties.friction !== undefined) {
+                        object.body.friction = parseFloat(properties.friction);
+                    }
+                    if (properties.frictionAir !== undefined) {
+                        object.body.frictionAir = parseFloat(properties.frictionAir);
+                    }
+                    
+                    // Store the radius for reset calculations (like in the main game)
+                    object.body.circleRadius = properties.radius;
+                    
+                    // Store initial position for respawn logic
+                    object.body.initialPosition = { x: position.x, y: position.y };
+                    object.body.initialAngle = 0;
                     break;
                     
                 case 'Frog':
@@ -947,6 +982,18 @@ class VitaChaosLevelEditor {
                         properties.size,
                         properties.label
                     );
+                    
+                    // Apply additional properties
+                    if (properties.friction !== undefined) {
+                        object.body.friction = parseFloat(properties.friction);
+                    }
+                    if (properties.restitution !== undefined) {
+                        object.body.restitution = parseFloat(properties.restitution);
+                    }
+                    
+                    // Store initial position for respawn logic
+                    object.body.initialPosition = { x: position.x, y: position.y };
+                    object.body.initialAngle = 0;
                     break;
                     
                 case 'Foofoo':
@@ -956,6 +1003,18 @@ class VitaChaosLevelEditor {
                         properties.size,
                         properties.label
                     );
+                    
+                    // Apply additional properties
+                    if (properties.friction !== undefined) {
+                        object.body.friction = parseFloat(properties.friction);
+                    }
+                    if (properties.restitution !== undefined) {
+                        object.body.restitution = parseFloat(properties.restitution);
+                    }
+                    
+                    // Store initial position for respawn logic
+                    object.body.initialPosition = { x: position.x, y: position.y };
+                    object.body.initialAngle = 0;
                     break;
                     
                 case 'ForceTriangle':
@@ -977,7 +1036,13 @@ class VitaChaosLevelEditor {
                     );
                     // Store force magnitude for later use
                     object.body.forceMagnitude = properties.forceMagnitude;
-
+                    
+                    // Store the radius for later use (like in the main game)
+                    object.body.triangleRadius = properties.radius;
+                    
+                    // Store initial position for respawn logic
+                    object.body.initialPosition = { x: position.x, y: position.y };
+                    object.body.initialAngle = 0;
                     break;
                     
                 case 'Platform':
@@ -1014,25 +1079,32 @@ class VitaChaosLevelEditor {
                 // If it's a ForceTriangle and the game's array exists, add it
                 if (type.name === 'ForceTriangle' && typeof window.forceTrianglesArray !== 'undefined') {
                     window.forceTrianglesArray.push(object.body);
+                    console.log('Added ForceTriangle to forceTrianglesArray');
                 }
                 // Add other dynamic objects to their respective global arrays
                 if (type.name === 'Box' && typeof window.boxStack !== 'undefined') {
                     window.boxStack.push(object.body);
+                    console.log('Added Box to boxStack');
                 }
                 if (type.name === 'BouncyBall' && typeof window.bouncyBallsArray !== 'undefined') {
                     window.bouncyBallsArray.push(object.body);
+                    console.log('Added BouncyBall to bouncyBallsArray');
                 }
                 if (type.name === 'Frog' && typeof window.frogStack !== 'undefined') {
                     window.frogStack.push(object.body);
+                    console.log('Added Frog to frogStack');
                 }
                 if (type.name === 'Foofoo' && typeof window.foofooStack !== 'undefined') {
                     window.foofooStack.push(object.body);
+                    console.log('Added Foofoo to foofooStack');
                 }
                 if (type.name === 'Platform' && typeof window.customStaticPlatformObjects !== 'undefined') {
                     window.customStaticPlatformObjects.push(object.body);
+                    console.log('Added Platform to customStaticPlatformObjects');
                 }
                 if (type.name === 'BouncyPlatform' && typeof window.bouncyPlatformObjects !== 'undefined') {
                     window.bouncyPlatformObjects.push(object.body);
+                    console.log('Added BouncyPlatform to bouncyPlatformObjects');
                 }
             }
             // Store the placed object
@@ -1146,7 +1218,13 @@ class VitaChaosLevelEditor {
         const arraysToUpdate = ['boxStack', 'bouncyBallsArray', 'frogStack', 'foofooStack', 'forceTrianglesArray', 'customStaticPlatformObjects', 'bouncyPlatformObjects'];
         arraysToUpdate.forEach(arrName => {
             if (typeof window[arrName] !== 'undefined' && Array.isArray(window[arrName])) {
+                const initialLength = window[arrName].length;
                 window[arrName] = window[arrName].filter(b => b !== bodyToDelete);
+                const finalLength = window[arrName].length;
+                
+                if (initialLength !== finalLength) {
+                    console.log(`Removed object from ${arrName} array`);
+                }
             }
         });
     }
