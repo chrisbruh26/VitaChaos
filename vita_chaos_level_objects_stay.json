@@ -1,0 +1,70 @@
+{
+  "name": "objects stay",
+  "objects": [
+    {
+      "type": "Platform",
+      "properties": {
+        "label": "Platform-1748119048864",
+        "width": 200,
+        "height": 30,
+        "color": "#36bbe7"
+      },
+      "position": {
+        "x": 500,
+        "y": 300
+      }
+    },
+    {
+      "type": "Platform",
+      "properties": {
+        "label": "Platform-1748119048864",
+        "width": 200,
+        "height": 30,
+        "color": "#36bbe7"
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "Platform",
+      "properties": {
+        "label": "Platform-1748119048864",
+        "width": 200,
+        "height": 30,
+        "color": "#36bbe7"
+      },
+      "position": {
+        "x": 1200,
+        "y": 200
+      }
+    },
+    {
+      "type": "Platform",
+      "properties": {
+        "label": "Platform-1748119048864",
+        "width": 200,
+        "height": 30,
+        "color": "#36bbe7"
+      },
+      "position": {
+        "x": 1060,
+        "y": 380
+      }
+    },
+    {
+      "type": "Platform",
+      "properties": {
+        "label": "Platform-1748119048864",
+        "width": 200,
+        "height": 30,
+        "color": "#36bbe7"
+      },
+      "position": {
+        "x": 1120,
+        "y": 240
+      }
+    }
+  ]
+}
