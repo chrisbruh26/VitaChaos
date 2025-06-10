@@ -1,0 +1,277 @@
+/* Styles moved from vitachaos.html (landing page) */
+body.landing-page { /* Added a class to scope these styles if needed, or remove .landing-page to apply globally */
+    margin: 0;
+    padding: 0;
+    background-color: #222;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+}
+
+.landing-page h1 {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+    color: #4CAF50;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.version-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.version-card {
+    background-color: #333;
+    border-radius: 10px;
+    padding: 1.5rem;
+    width: 300px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.version-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.version-card h2 { /* Changed from global h2 to be more specific */
+    color: #4CAF50;
+    margin-top: 0;
+}
+
+.version-card p { /* Changed from global p */
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.btn {
+    display: inline-block;
+    background-color: #4CAF50;
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.btn:hover {
+    background-color: #45a049;
+}
+
+/* Styles for .game-plans can remain global if they are used on other pages, or be scoped with .landing-page */
+.game-plans {
+    max-width: 800px;
+    margin: 0 auto;
+    text-align: left;
+    background-color: #333;
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+
+.game-plans h3 {
+    color: #4CAF50;
+    margin-top: 0;
+}
+
+.game-plans ul {
+    padding-left: 1.5rem;
+}
+
+.game-plans li {
+    margin-bottom: 0.5rem;
+}
+
+
+/* Styles moved from vitachaos_mobile.html (Mobile Game View) */
+/* Apply to body when it's a game page, could use a class like .mobile-game-body if needed for more specificity */
+body.mobile-game-body, body.desktop-game-body { /* Using common classes for game bodies */
+    margin: 0;
+    padding: 0;
+    background-color: #111; /* Darker background for game view */
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden; /* Prevent scrollbars in game view */
+}
+
+body.mobile-game-body {
+    touch-action: none; /* Prevent browser handling of touch events specifically for mobile game */
+}
+
+/* Common for both desktop and mobile game containers */
+#game-container {
+    width: 100%;
+    height: 100vh; /* Full viewport height */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Styles for #game-plans-container (can be shared or specified) */
+/* If #game-plans-container is styled differently on mobile vs desktop, use more specific selectors or classes */
+.game-view #game-plans-container { /* Assuming a .game-view class on body of game pages */
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    max-width: 90%; /* More flexible for mobile */
+    z-index: 100;
+    font-size: 14px;
+}
+
+.game-view #game-plans-container summary {
+    cursor: pointer;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+/* .game-plans and .game-plans li are already defined globally from vitachaos.html styles,
+   so they will apply here as well unless overridden. */
+
+/* Prevent text selection - good for game interfaces */
+.no-select, .mobile-game-body * { /* Added .no-select class for broader use */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+
+/* mobile game screen handling */
+#orientation-warning {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    z-index: 1000;
+    color: white;
+    text-align: center;
+    font-size: 28px;
+    padding-top: 30vh;
+    font-family: Arial, sans-serif;
+    box-sizing: border-box;
+}
+
+#orientation-warning p {
+    margin: 10px 20px;
+    padding: 0;
+}
+
+#orientation-warning p:nth-child(2) {
+    font-size: 48px;
+    margin: 20px 0;
+    animation: rotate 2s infinite;
+}
+
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+#orientation-warning.portrait-mode {
+    display: block !important;
+}
+
+body.portrait-orientation #orientation-warning {
+    display: block !important;
+}
+
+@media (orientation: portrait) {
+    #orientation-warning {
+        display: block !important;
+    }
+}
+
+
+
+
+
+
+/* Styles moved from vitachaos2.html <style> block */
+/* Applied to body specifically for vitachaos2.html context,
+   consider namespacing with a class if these are too general */
+body.vitachaos2-body { /* Added a class to scope these body styles */
+    margin: 0;
+    padding: 0;
+    background-color: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+/* Styles for elements within vitachaos2.html */
+.vitachaos2-body #game-container { /* Scoped to vitachaos2-body */
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.vitachaos2-body #game-plans-container { /* Scoped to vitachaos2-body */
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    max-width: 400px;
+    z-index: 100;
+}
+
+.vitachaos2-body #game-plans-container summary { /* Scoped to vitachaos2-body */
+    cursor: pointer;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+.vitachaos2-body #game-plans-container #game-plans { /* Scoped to vitachaos2-body and specific ID */
+    text-align: left;
+    padding-left: 20px;
+}
+
+.vitachaos2-body #game-plans-container #game-plans li { /* Scoped to vitachaos2-body and specific ID */
+    margin: 5px 0;
+}
+
+/* Styles for #controls-info and its children from vitachaos2.html */
+#controls-info {
+    position: absolute; 
+    top: 10px; 
+    right: 10px; 
+    background-color: rgba(0, 0, 0, 0.7); 
+    padding: 10px; 
+    border-radius: 5px; 
+    color: white; 
+    font-size: 14px; 
+    z-index: 100; 
+    display: none;
+}
+
+#controls-info h3 {
+    margin-top: 0; 
+    color: #4CAF50;
+}
+
+#controls-info ul {
+    padding-left: 20px; 
+    margin-bottom: 5px;
+}

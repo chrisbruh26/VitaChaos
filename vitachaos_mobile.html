@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="screen-orientation" content="landscape">
+    <meta name="orientation" content="landscape">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6699ff">
+
+    <title>Vita Chaos - Mobile Version</title>
+    <link rel="stylesheet" href="vitachaos.css">
+    <link rel="icon" type="image/x-icon" href="images/vitaimages/vita5.ico">
+</head>
+<body class="mobile-game-body">
+    <div id="orientation-warning">
+        <p>Please rotate your device to landscape mode</p>
+        <p>↻</p>
+    </div>
+    <div id="game-container"></div>
+    <div id="game-plans-container">
+        <details>
+            <summary>Next Plans (click to expand/collapse)</summary>
+            <ul id="game-plans">
+                <li> Make this version more interesting</li>
+                <li> power ups/special abilities (not limited in use, so no cooldown for powerups/abilities for now) that let Vita kick/headbutt objects around and send them flying</li>
+                <li> use my own artwork as sprites in addition to the regular shapes, maybe give them special behaviors</li>
+                <li> more rooms with boundaries between each one, but a way to get between them, and different objects/behaviors in each one<br>special objects that affect gravity/physics</li>
+            </ul>
+        </details>
+    </div>
+    <!-- Get Matter.js from a CDN or download it locally -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- Orientation warning handler -->
+    <script>
+        // Handle orientation warning display
+        function updateOrientationWarning() {
+            const warning = document.getElementById('orientation-warning');
+            if (!warning) return;
+            
+            // Check orientation in multiple ways for better compatibility
+            const isPortrait = window.innerWidth < window.innerHeight;
+            
+            if (isPortrait) {
+                warning.style.display = 'block';
+                warning.classList.add('portrait-mode');
+                document.body.classList.add('portrait-orientation');
+                // console.log("Portrait mode detected - showing warning");
+            } else {
+                warning.style.display = 'none';
+                warning.classList.remove('portrait-mode');
+                document.body.classList.remove('portrait-orientation');
+                // console.log("Landscape mode detected - hiding warning");
+                // Call the game's resize handler when switching to landscape
+                if (window.gameAPI && typeof window.gameAPI.handleResize === 'function') {
+                    window.gameAPI.handleResize();
+                }
+            }
+        }
+        
+        // Update on load, resize and orientation change
+        window.addEventListener('load', updateOrientationWarning);
+        window.addEventListener('resize', updateOrientationWarning);
+        window.addEventListener('orientationchange', function() {
+            // console.log("Orientation change detected");
+            // Small delay to ensure dimensions are updated
+            setTimeout(updateOrientationWarning, 300);
+        });
+        
+        // Initial call
+        updateOrientationWarning();
+    </script>
+<script src="vitachaos_mobile.js"></script>
+</body>
+</html>
